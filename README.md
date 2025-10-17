@@ -10,13 +10,15 @@
 
 ## Установка и запуск
 
-### 1. Установка зависимостей
+### Локальная установка
+
+#### 1. Установка зависимостей
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 2. Настройка переменных окружения
+#### 2. Настройка переменных окружения
 
 Скопируйте `env.example` в `.env` и настройте параметры:
 
@@ -24,7 +26,7 @@ pip install -r requirements.txt
 cp env.example .env
 ```
 
-### 3. Запуск приложения
+#### 3. Запуск приложения
 
 ```bash
 python main.py
@@ -34,6 +36,37 @@ python main.py
 
 ```bash
 uvicorn main:app --reload
+```
+
+### Docker
+
+#### 1. Сборка образа
+
+```bash
+docker build -t time-server-api .
+```
+
+#### 2. Запуск контейнера
+
+```bash
+# Запуск с настройками по умолчанию
+docker run -p 8000:8000 time-server-api
+
+# Запуск с кастомными переменными окружения
+docker run -p 8000:8000 -e HOST=0.0.0.0 -e PORT=8000 -e DEBUG=False time-server-api
+```
+
+#### 3. Запуск в фоновом режиме
+
+```bash
+docker run -d -p 8000:8000 --name time-server time-server-api
+```
+
+#### 4. Остановка контейнера
+
+```bash
+docker stop time-server
+docker rm time-server
 ```
 
 ## API Endpoints
