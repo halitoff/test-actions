@@ -1,15 +1,65 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from datetime import datetime
 import uvicorn
 import os
 from dotenv import load_dotenv
+import pytz
+from typing import Optional
 
 # Загружаем переменные окружения
 load_dotenv()
 
+# Словарь соответствий городов и часовых поясов
+TIMEZONE_MAPPING = {
+    "москва": "Europe/Moscow",
+    "moscow": "Europe/Moscow",
+    "екатеринбург": "Asia/Yekaterinburg", 
+    "yekaterinburg": "Asia/Yekaterinburg",
+    "новосибирск": "Asia/Novosibirsk",
+    "novosibirsk": "Asia/Novosibirsk",
+    "владивосток": "Asia/Vladivostok",
+    "vladivostok": "Asia/Vladivostok",
+    "калининград": "Europe/Kaliningrad",
+    "kaliningrad": "Europe/Kaliningrad",
+    "самара": "Europe/Samara",
+    "samara": "Europe/Samara",
+    "омск": "Asia/Omsk",
+    "omsk": "Asia/Omsk",
+    "красноярск": "Asia/Krasnoyarsk",
+    "krasnoyarsk": "Asia/Krasnoyarsk",
+    "иркутск": "Asia/Irkutsk",
+    "irkutsk": "Asia/Irkutsk",
+    "якутск": "Asia/Yakutsk",
+    "yakutsk": "Asia/Yakutsk",
+    "магадан": "Asia/Magadan",
+    "magadan": "Asia/Magadan",
+    "камчатка": "Asia/Kamchatka",
+    "kamchatka": "Asia/Kamchatka",
+    "лондон": "Europe/London",
+    "london": "Europe/London",
+    "париж": "Europe/Paris",
+    "paris": "Europe/Paris",
+    "берлин": "Europe/Berlin",
+    "berlin": "Europe/Berlin",
+    "токио": "Asia/Tokyo",
+    "tokyo": "Asia/Tokyo",
+    "пекин": "Asia/Shanghai",
+    "beijing": "Asia/Shanghai",
+    "шанхай": "Asia/Shanghai",
+    "shanghai": "Asia/Shanghai",
+    "нью-йорк": "America/New_York",
+    "new_york": "America/New_York",
+    "лос-анджелес": "America/Los_Angeles",
+    "los_angeles": "America/Los_Angeles",
+    "сидней": "Australia/Sydney",
+    "sydney": "Australia/Sydney",
+    "дубай": "Asia/Dubai",
+    "dubai": "Asia/Dubai"
+}
+
 app = FastAPI(
     title="Time Server API",
-    description="Простое API для получения текущего времени сервера",
+    description="Простое API для получения текущего времени сервера и конвертации между часовыми поясами",
     version="1.0.0"
 )
 
@@ -66,6 +116,73 @@ async def get_current_datetime():
         "weekday_number": current_datetime.weekday(),
         "day_of_year": current_datetime.timetuple().tm_yday
     }
+
+@app.get("/convert-time")
+async def convert_time(
+    time: str,
+    timezone: str
+):
+    """
+    Конвертирует время из UTC в указанный часовой пояс
+    
+    Args:
+        time: Время в формате "HH:MM" или "HH:MM:SS" (UTC)
+        timezone: Название города или часового пояса (например: "екатеринбург", "moscow")
+    
+    Returns:
+        Конвертированное время в указанном часовом поясе
+    """
+    try:
+        # Нормализуем название часового пояса
+        timezone_lower = timezone.lower().strip()
+        
+        # Получаем часовой пояс из словаря
+        if timezone_lower in TIMEZONE_MAPPING:
+            target_timezone = pytz.timezone(TIMEZONE_MAPPING[timezone_lower])
+        else:
+            # Пробуем использовать переданное значение как есть
+            try:
+                target_timezone = pytz.timezone(timezone)
+            except pytz.exceptions.UnknownTimeZoneError:
+                raise HTTPException(
+                    status_code=400, 
+                    detail=f"Неизвестный часовой пояс: {timezone}. Доступные варианты: {', '.join(TIMEZONE_MAPPING.keys())}"
+                )
+        
+        # Парсим время
+        time_parts = time.split(":")
+        if len(time_parts) < 2:
+            raise HTTPException(status_code=400, detail="Неверный формат времени. Используйте HH:MM или HH:MM:SS")
+        
+        hour = int(time_parts[0])
+        minute = int(time_parts[1])
+        second = int(time_parts[2]) if len(time_parts) > 2 else 0
+        
+        if not (0 <= hour <= 23 and 0 <= minute <= 59 and 0 <= second <= 59):
+            raise HTTPException(status_code=400, detail="Неверные значения времени")
+        
+        # Создаем datetime объект в UTC
+        utc_now = datetime.now(pytz.UTC)
+        utc_time = utc_now.replace(hour=hour, minute=minute, second=second, microsecond=0)
+        
+        # Конвертируем в целевой часовой пояс
+        local_time = utc_time.astimezone(target_timezone)
+        
+        # Форматируем результат
+        return {
+            "input_time_utc": utc_time.strftime("%H:%M:%S"),
+            "input_timezone": "UTC",
+            "target_timezone": str(target_timezone),
+            "converted_time": local_time.strftime("%H:%M:%S"),
+            "converted_datetime": local_time.isoformat(),
+            "timezone_offset": local_time.strftime("%z"),
+            "city_name": timezone_lower
+        }
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Ошибка парсинга времени: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Внутренняя ошибка сервера: {str(e)}")
 
 @app.get("/health")
 async def health_check():
